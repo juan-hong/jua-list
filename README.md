@@ -6,6 +6,8 @@ Tasks live in plain Markdown checklists. The widget sits on the desktop layer, s
 
 [한국어 안내](#한국어)
 
+![jua-list widget: tasks with Claude, review and blocked states](docs/widget.jpg)
+
 ```
 ## Website
 - [x] Fix login bug
