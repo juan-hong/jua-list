@@ -1,6 +1,6 @@
 {
   "name": "jua-list",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Use jua-list, a Windows desktop todo widget you share with Claude: Claude reads and edits your Markdown todo lists, and tasks you tag @claude get done and wait for your review.",
   "author": {
     "name": "juan-hong",
@@ -9,6 +9,14 @@
   "homepage": "https://github.com/juan-hong/jua-list",
   "repository": "https://github.com/juan-hong/jua-list",
   "license": "MIT",
-  "keywords": ["todo", "widget", "desktop", "windows", "task", "markdown"],
-  "icon": ".claude-plugin/icon.png"
+  "keywords": [
+    "todo",
+    "widget",
+    "desktop",
+    "windows",
+    "task",
+    "markdown"
+  ],
+  "icon": ".claude-plugin/icon.png",
+  "privacyPolicyUrl": "https://github.com/juan-hong/jua-list/blob/main/PRIVACY.md"
 }

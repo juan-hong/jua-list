@@ -280,6 +280,22 @@ class TestRun(Base):
         self.assertIn("jua result", p)
         self.assertIn(self.dir, p)
 
+    def test_prompt_has_context(self):
+        with open(self.md, "w", encoding="utf-8") as f:
+            f.write("# T\n\n## A\n섹션 설명: Flask 앱\n- [x] 로그인 만들기\n  - 결과: /login 추가\n"
+                    "- [ ] @claude 회원가입 만들기 <!-- id:abc123 -->\n  - 결과: 이전 메모\n  - [ ] 이메일 검증\n"
+                    "  비밀번호는 8자 이상\n- [ ] 배포\n\n## B\n- [ ] 다른 섹션\n")
+        d = self.doc()
+        p = core.build_prompt(d, d.resolve("abc123"))
+        self.assertIn("  - [ ] 이메일 검증\n  비밀번호는 8자 이상\n\n", p)  # 하위 항목·메모, 결과 줄은 빠짐
+        self.assertEqual(p.count("이전 메모"), 1)
+        self.assertIn("섹션 설명: Flask 앱", p)
+        self.assertIn("- [x] 로그인 만들기  (result: /login 추가)", p)  # 같은 섹션 맥락
+        self.assertIn("- [ ] 배포", p)
+        self.assertNotIn("다른 섹션", p)
+        self.assertEqual(p.count("이메일 검증"), 1)  # 하위 항목이 맥락 목록에 또 안 나옴
+        self.assertIn("Previous note (question/answer/result): 이전 메모", p)
+
     def test_start_run_missing_cwd(self):
         cli("add", "@claude 폴더", "-f", "t", "-s", "A")
         cli("entry", "t", "--cwd", os.path.join(TMP, "없는폴더"))

@@ -61,7 +61,7 @@ def log(msg):
 
 
 @contextmanager
-def locked(timeout=10):
+def locked(timeout=30):
     """프로세스 간 잠금. 위젯·CLI·MCP가 동시에 쓰는 거 막음."""
     f = open(LOCK_PATH, "a+b")
     end = time.time() + timeout
@@ -119,9 +119,18 @@ def load_cfg():
         if not os.path.exists(CFG_PATH):
             save_cfg(DEFAULT_CFG)
         return load_cfg()
+    for k in range(40):
+        try:
+            with open(CFG_PATH, "rb") as f:
+                raw = f.read()
+            break
+        except PermissionError:
+            # 바꿔치기 찰나. 잠깐 기다림
+            if k == 39:
+                raise
+            time.sleep(0.05)
     try:
-        with open(CFG_PATH, encoding="utf-8-sig") as f:
-            data = json.load(f)
+        data = json.loads(raw.decode("utf-8-sig"))
     except ValueError as e:
         raise JuaError(_("config.json 형식 오류: {0}").format(e))
     if not isinstance(data, dict):
@@ -256,11 +265,21 @@ class Doc:
     def load(self):
         self.mtime = self.stat()
         self.error, self.readonly = None, False
-        try:
-            with open(self.path, "rb") as f:
-                raw = f.read()
-        except OSError as e:
-            self.lines, self.error, self.readonly = [], str(e), True
+        raw = None
+        for k in range(40):
+            try:
+                with open(self.path, "rb") as f:
+                    raw = f.read()
+                break
+            except PermissionError as e:
+                # 다른 프로세스가 바꿔치기하는 찰나면 잠깐 기다림
+                err = e
+                time.sleep(0.05)
+            except OSError as e:
+                err = e
+                break
+        if raw is None:
+            self.lines, self.error, self.readonly = [], str(err), True
             return
         self.bom = raw.startswith(b"\xef\xbb\xbf")
         try:
@@ -510,6 +529,48 @@ def open_doc(cfg, ref=None):
 
 
 # ---------- Claude 실행 ----------
+def _indent(line):
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def task_end(doc, t):
+    """항목 블록 끝(미포함). 더 들여쓴 줄·빈 줄까지가 그 항목 것."""
+    base, end = _indent(t["line"]), t["i"] + 1
+    for j in range(t["i"] + 1, len(doc.lines)):
+        line = doc.lines[j]
+        if line.strip() and (_indent(line) <= base or HEAD_RE.match(line)):
+            break
+        if line.strip():
+            end = j + 1
+    return end
+
+
+def task_details(doc, t):
+    """항목 아래 더 들여쓴 줄들(하위 항목·메모). 결과 줄은 따로 넘기니 뺌."""
+    base = _indent(t["line"])
+    return [doc.lines[j][base:] if doc.lines[j].strip() else ""
+            for j in range(t["i"] + 1, task_end(doc, t)) if j != t["result_i"]]
+
+
+def section_context(doc, t, limit=30):
+    """섹션 설명(제목과 첫 항목 사이 글)과 같은 섹션 다른 항목(상태·결과)."""
+    sec = next((s for s in doc.sections() if s["head"] == t["head"]), None)
+    if not sec:
+        return [], []
+    start = sec["head"] + 1 if sec["head"] >= 0 else 0
+    first = sec["items"][0]["i"] if sec["items"] else len(doc.lines)
+    notes = [l for l in doc.lines[start:first] if l.strip() and not HEAD_RE.match(l)]
+    others, end = [], task_end(doc, t)
+    for x in sec["items"]:
+        if t["i"] <= x["i"] < end:
+            continue  # 자기 자신과 하위 항목은 details로 감
+        s = f"{'  ' * x['indent']}- [{MARK[x['status']]}] {x['text']}"
+        if x["result"]:
+            s += f"  (result: {x['result']})"
+        others.append(s)
+    return notes[:limit], others[:limit]
+
+
 def build_prompt(doc, t):
     # 프롬프트는 영어 고정. 결과 언어만 화면 언어 따라감
     lang = "Korean" if LANG == "ko" else "English"
@@ -523,6 +584,14 @@ def build_prompt(doc, t):
     ]
     if t["result"]:
         lines.append(f"- Previous note (question/answer/result): {t['result']}")
+    details = task_details(doc, t)
+    if details:
+        lines += ["", "Details the person wrote under this task (sub-items and notes):", *details]
+    notes, others = section_context(doc, t)
+    if notes:
+        lines += ["", "Section notes:", *notes]
+    if others:
+        lines += ["", "Other items in this section, for context only (do not work on them):", *others]
     lines += [
         "",
         "Rules:",

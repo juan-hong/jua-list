@@ -11,14 +11,8 @@ jua-list is a Windows desktop todo widget. People manage tasks in it and hand ta
 
 This plugin contains only this skill. The widget, the `jua` command and the MCP server come from the open-source repository https://github.com/juan-hong/jua-list (MIT).
 
-1. Run `jua --help`. If it works, skip to the next section.
-2. Otherwise tell the user that jua-list needs its app, that it will be downloaded from https://github.com/juan-hong/jua-list into `%LOCALAPPDATA%\Programs\jua-list`, and what the installer does: puts a `jua` command in `~\.local\bin`, registers the `jua-list` MCP server in Claude Code and the Claude desktop app, and, if they want, starts the widget at sign-in. **Ask for permission and wait for a clear yes.** Do not install without it.
-3. Check the requirements: Windows, `python --version` (3.10+) and `git --version`. If one is missing, tell the user what to install and stop.
-4. With permission, install (Bash):
-   - `git clone https://github.com/juan-hong/jua-list "$LOCALAPPDATA/Programs/jua-list"` (if the folder exists, `git -C "$LOCALAPPDATA/Programs/jua-list" pull` instead)
-   - `python "$LOCALAPPDATA/Programs/jua-list/jua/jua.py" install --mcp` — add `--startup` only if the user wants the widget to start at sign-in
-   - `jua widget` to start the widget. If `jua` is not found, `~\.local\bin` is not on PATH: tell the user, and call `python "$LOCALAPPDATA/Programs/jua-list/jua/jua.py"` directly meanwhile.
-5. Tell the user what was installed and that a sample list was created (`jua lists`). MCP tools appear after Claude Code or the desktop app restarts.
+1. If the `jua_*` MCP tools are available, or `jua --help` works, the app is installed: go on to the next section.
+2. Otherwise do not install anything yourself. Tell the user that jua-list needs its app (Windows 10/11, Python 3.10+ with tkinter), and point them to the install steps in the repository README: https://github.com/juan-hong/jua-list#install. Once they have installed it, continue.
 
 ## Tools — always change lists through these, never by editing the .md directly
 

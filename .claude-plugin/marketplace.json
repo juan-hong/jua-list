@@ -12,9 +12,14 @@
       "name": "jua-list",
       "source": "./",
       "description": "Desktop todo widget for Windows that Claude can read, edit and work on.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "license": "MIT",
-      "keywords": ["todo", "widget", "windows", "mcp"]
+      "keywords": [
+        "todo",
+        "widget",
+        "windows",
+        "mcp"
+      ]
     }
   ]
 }
