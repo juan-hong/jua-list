@@ -1,0 +1,20 @@
+{
+  "name": "jua-list",
+  "owner": {
+    "name": "juan-hong",
+    "url": "https://github.com/juan-hong"
+  },
+  "metadata": {
+    "description": "jua_list: a desktop todo widget shared by you and Claude"
+  },
+  "plugins": [
+    {
+      "name": "jua-list",
+      "source": "./",
+      "description": "Desktop todo widget for Windows that Claude can read, edit and work on.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": ["todo", "widget", "windows", "mcp"]
+    }
+  ]
+}
