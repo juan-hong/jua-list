@@ -1,4 +1,4 @@
-"""jua_list CLI. Claude·사람이 목록을 다룸. 예: jua list, jua add "할 일" -s 섹션 --claude"""
+"""jua-list CLI. Claude·사람이 목록을 다룸. 예: jua list, jua add "할 일" -s 섹션 --claude"""
 import argparse
 import json
 import os
@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jua_core as core  # noqa: E402
 from jua_core import JuaError  # noqa: E402
+from jua_i18n import _  # noqa: E402
 
 
 # ---------- 동작 (MCP도 이걸 씀. 전부 문자열 반환) ----------
@@ -19,10 +20,12 @@ def op_lists():
         its = d.items()
         cnt = {s: sum(t["status"] == s for t in its) for s in core.MARK}
         mine = sum(t["claude"] and t["status"] != "done" for t in its)
-        out.append(f"{k}. {e['name']}  남음 {len(its) - cnt['done']}/{len(its)}, Claude 맡김 {mine}, "
-                   f"검토 대기 {cnt['review']}, 막힘 {cnt['blocked']}\n   파일: {e['path']}\n   작업 폴더: {e['cwd']}"
-                   + (f"\n   오류: {d.error}" if d.error else ""))
-    return "\n".join(out) or "등록된 목록 없음"
+        out.append(_("{0}. {1}  남음 {2}/{3}, Claude 맡김 {4}, 검토 대기 {5}, 막힘 {6}").format(
+            k, e["name"], len(its) - cnt["done"], len(its), mine, cnt["review"], cnt["blocked"])
+                   + "\n   " + _("파일: {0}").format(e["path"])
+                   + "\n   " + _("작업 폴더: {0}").format(e["cwd"])
+                   + ("\n   " + _("오류: {0}").format(d.error) if d.error else ""))
+    return "\n".join(out) or _("등록된 목록 없음")
 
 
 def op_list(file=None, status=None, claude=False, hide_done=False, all_files=False):
@@ -33,7 +36,7 @@ def op_list(file=None, status=None, claude=False, hide_done=False, all_files=Fal
             d = core.Doc(e["path"], e["name"], e["cwd"])
             d.load()
             docs.append(core.fmt_doc(d, status, claude, hide_done))
-        return "\n\n".join(docs) or "등록된 목록 없음"
+        return "\n\n".join(docs) or _("등록된 목록 없음")
     return core.fmt_doc(core.open_doc(cfg, file), status, claude, hide_done)
 
 
@@ -45,57 +48,57 @@ def _doc_item(file, ref):
 def op_add(text, file=None, section=None, claude=False, create=False):
     d = core.open_doc(core.load_cfg(), file)
     t = d.add(text, section, claude, create)
-    return "추가함: " + core.fmt_item(t)
+    return _("추가함: ") + core.fmt_item(t)
 
 
 def op_status(ref, status, file=None):
     if status not in core.MARK:
-        raise JuaError(f"상태는 {', '.join(core.MARK)} 중 하나")
+        raise JuaError(_("상태는 {0} 중 하나").format(', '.join(core.MARK)))
     d, t = _doc_item(file, ref)
-    return f"{core.STATUS_KO[status]}(으)로 바꿈: " + core.fmt_item(d.set_status(t, status))
+    return _("{0}(으)로 바꿈: ").format(core.STATUS_KO[status]) + core.fmt_item(d.set_status(t, status))
 
 
 def op_edit(ref, text, file=None):
     d, t = _doc_item(file, ref)
-    return "고침: " + core.fmt_item(d.edit(t, text))
+    return _("고침: ") + core.fmt_item(d.edit(t, text))
 
 
 def op_rm(ref, file=None):
     d, t = _doc_item(file, ref)
     d.delete(t)
-    return f"지움: #{t['n']} {t['text']}"
+    return _("지움: #{0} {1}").format(t['n'], t['text'])
 
 
 def op_move(ref, file=None, to=None, delta=0):
     d, t = _doc_item(file, ref)
-    return "옮김: " + core.fmt_item(d.move(t, to, delta))
+    return _("옮김: ") + core.fmt_item(d.move(t, to, delta))
 
 
 def op_claude(ref, on=True, file=None):
     d, t = _doc_item(file, ref)
-    return ("Claude에게 맡김: " if on else "맡김 해제: ") + core.fmt_item(d.set_claude(t, on))
+    return (_("Claude에게 맡김: ") if on else _("맡김 해제: ")) + core.fmt_item(d.set_claude(t, on))
 
 
 def op_result(ref, text, file=None):
     d, t = _doc_item(file, ref)
-    return "결과 남김: " + core.fmt_item(d.set_result(t, text))
+    return _("결과 남김: ") + core.fmt_item(d.set_result(t, text))
 
 
 def op_block(ref, question, file=None):
     d, t = _doc_item(file, ref)
     t = d.set_status(t, "blocked")
-    return "질문 남김: " + core.fmt_item(d.set_result(t, f"질문: {question}"))
+    return _("질문 남김: ") + core.fmt_item(d.set_result(t, _("질문: {0}").format(question)))
 
 
 def op_register(path, name=None, cwd=None):
     path = os.path.abspath(path)
     if not os.path.exists(path):
-        raise JuaError(f"파일 없음: {path} (새로 만들려면 jua new)")
+        raise JuaError(_("파일 없음: {0} (새로 만들려면 jua new)").format(path))
 
     def fn(cfg):
         for e in core.entries(cfg):
             if e["path"].lower() == path.lower():
-                raise JuaError(f"이미 등록됨: {e['name']}")
+                raise JuaError(_("이미 등록됨: {0}").format(e['name']))
         item = {"path": path}
         if name:
             item["name"] = name
@@ -103,7 +106,7 @@ def op_register(path, name=None, cwd=None):
             item["cwd"] = os.path.abspath(cwd)
         cfg["files"].append(item if len(item) > 1 else path)
     core.update_cfg(fn)
-    return f"등록함: {path}"
+    return _("등록함: {0}").format(path)
 
 
 def op_unregister(file):
@@ -115,7 +118,7 @@ def op_unregister(file):
                       if os.path.abspath(os.path.expandvars(x if isinstance(x, str) else x.get("path", ""))).lower()
                       != e["path"].lower()]
     core.update_cfg(fn)
-    return f"등록 해제함(파일은 그대로): {e['name']}"
+    return _("등록 해제함(파일은 그대로): {0}").format(e['name'])
 
 
 def op_set_entry(file, name=None, cwd=None):
@@ -133,13 +136,13 @@ def op_set_entry(file, name=None, cwd=None):
                     x["cwd"] = os.path.abspath(cwd)
                 c["files"][k] = x
     core.update_cfg(fn)
-    return f"바꿈: {name or e['name']} (작업 폴더 {os.path.abspath(cwd) if cwd else e['cwd']})"
+    return _("바꿈: {0} (작업 폴더 {1})").format(name or e['name'], os.path.abspath(cwd) if cwd else e['cwd'])
 
 
 def op_new(path, title=None, sections=None, name=None, cwd=None, register=True):
-    secs = [s.strip() for s in (sections or "할 일").split(",") if s.strip()]
+    secs = [s.strip() for s in (sections or _("할 일")).split(",") if s.strip()]
     p = core.new_list(path, title or os.path.splitext(os.path.basename(path))[0], secs)
-    msg = f"만듦: {p}"
+    msg = _("만듦: {0}").format(p)
     if register:
         msg += "\n" + op_register(p, name, cwd)
     return msg
@@ -152,12 +155,12 @@ def op_config(key=None, value=None):
         return json.dumps(show, ensure_ascii=False, indent=2)
     parts = key.split(".")
     if parts[0] == "files":
-        raise JuaError("files는 jua register / unregister / entry로 바꿈")
+        raise JuaError(_("files는 jua register / unregister / entry로 바꿈"))
     if value is None:
         cur = cfg
         for p in parts:
             if not isinstance(cur, dict) or p not in cur:
-                raise JuaError(f"설정 '{key}' 없음")
+                raise JuaError(_("설정 '{0}' 없음").format(key))
             cur = cur[p]
         return json.dumps(cur, ensure_ascii=False)
     try:
@@ -184,9 +187,9 @@ def op_install(mcp=False, startup=False):
         f.write(f'@"{py}" "{me}" %*\r\n')
     with open(os.path.join(bindir, "jua"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f'#!/bin/sh\nexec "{py.replace(os.sep, "/")}" "{me.replace(os.sep, "/")}" "$@"\n')
-    out = [f"설치함: {bindir}\\jua.cmd, {bindir}\\jua"]
+    out = [_("설치함: {0}\\jua.cmd, {1}\\jua").format(bindir, bindir)]
     if bindir.lower() not in os.environ.get("PATH", "").lower():
-        out.append(f"주의: {bindir}가 PATH에 없음. PATH에 추가해야 jua 명령이 됨")
+        out.append(_("주의: {0}가 PATH에 없음. PATH에 추가해야 jua 명령이 됨").format(bindir))
     if mcp:
         out += install_mcp(py, os.path.join(os.path.dirname(me), "jua_mcp.py"))
     if startup:
@@ -203,19 +206,25 @@ def op_widget():
     import subprocess
     w = os.path.join(os.path.dirname(os.path.abspath(__file__)), "widget.py")
     subprocess.Popen([_pythonw(), w], cwd=os.path.dirname(w), creationflags=0x00000008 | 0x00000200)
-    return "위젯 실행함 (이미 떠 있으면 그대로)"
+    return _("위젯 실행함 (이미 떠 있으면 그대로)")
 
 
 def install_startup():
     import subprocess
     w = os.path.join(os.path.dirname(os.path.abspath(__file__)), "widget.py")
     startup = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-    lnk = os.path.join(startup, "jua_list.lnk")
+    lnk = os.path.join(startup, "jua-list.lnk")
+    for old in ("jua_list.lnk", "Todo Widget.lnk"):
+        # 예전 이름 바로가기 정리
+        try:
+            os.remove(os.path.join(startup, old))
+        except OSError:
+            pass
     ps = ("$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:J_LNK);"
           "$s.TargetPath=$env:J_PYW;$s.Arguments='\"'+$env:J_W+'\"';$s.WorkingDirectory=$env:J_DIR;$s.Save()")
     env = dict(os.environ, J_LNK=lnk, J_PYW=_pythonw(), J_W=w, J_DIR=os.path.dirname(w))
     r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], env=env, capture_output=True)
-    return f"시작 프로그램 등록함: {lnk}" if r.returncode == 0 else "시작 프로그램 등록 실패"
+    return _("시작 프로그램 등록함: {0}").format(lnk) if r.returncode == 0 else _("시작 프로그램 등록 실패")
 
 
 def install_mcp(py, server):
@@ -224,12 +233,13 @@ def install_mcp(py, server):
     out = []
     exe = shutil.which("claude")
     if exe:
-        subprocess.run([exe, "mcp", "remove", "jua_list", "--scope", "user"], capture_output=True)
-        r = subprocess.run([exe, "mcp", "add", "--scope", "user", "jua_list", "--", py, server],
+        for name in ("jua-list", "jua_list"):  # jua_list는 예전 이름
+            subprocess.run([exe, "mcp", "remove", name, "--scope", "user"], capture_output=True)
+        r = subprocess.run([exe, "mcp", "add", "--scope", "user", "jua-list", "--", py, server],
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
-        out.append("Claude Code MCP 등록함" if r.returncode == 0 else f"Claude Code MCP 등록 실패: {r.stderr.strip()}")
+        out.append(_("Claude Code MCP 등록함") if r.returncode == 0 else _("Claude Code MCP 등록 실패: {0}").format(r.stderr.strip()))
     else:
-        out.append("claude 명령 없음. Claude Code MCP 등록 건너뜀")
+        out.append(_("claude 명령 없음. Claude Code MCP 등록 건너뜀"))
     import glob
     # MSIX 설치면 패키지 안 LocalCache가 진짜 위치
     cands = glob.glob(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Packages", "Claude_*",
@@ -237,7 +247,7 @@ def install_mcp(py, server):
     cands.append(os.path.join(os.environ.get("APPDATA", ""), "Claude"))
     home = next((c for c in cands if os.path.isdir(c)), None)
     if not home:
-        out.append("Claude 데스크톱 앱 설정 폴더 없음. 건너뜀")
+        out.append(_("Claude 데스크톱 앱 설정 폴더 없음. 건너뜀"))
     else:
         path = os.path.join(home, "claude_desktop_config.json")
         data = {}
@@ -247,11 +257,12 @@ def install_mcp(py, server):
                     data = json.load(f)
             except ValueError:
                 # 깨진 설정 덮어쓰면 안 됨
-                out.append(f"데스크톱 설정 형식 오류. 건너뜀: {path}")
+                out.append(_("데스크톱 설정 형식 오류. 건너뜀: {0}").format(path))
                 return out
-        data.setdefault("mcpServers", {})["jua_list"] = {"command": py, "args": [server]}
+        data.setdefault("mcpServers", {}).pop("jua_list", None)
+        data["mcpServers"]["jua-list"] = {"command": py, "args": [server]}
         core.atomic_write(path, (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
-        out.append(f"데스크톱 앱 MCP 등록함 (앱 다시 시작해야 반영): {path}")
+        out.append(_("데스크톱 앱 MCP 등록함 (앱 다시 시작해야 반영): {0}").format(path))
     return out
 
 
@@ -263,68 +274,68 @@ def main(argv=None):
         except Exception:
             pass
     fp = argparse.ArgumentParser(add_help=False)
-    fp.add_argument("-f", "--file", help="목록 이름·번호·경로 (생략하면 지금 폴더 목록, 없으면 첫 목록)")
-    ap = argparse.ArgumentParser(prog="jua", description="jua_list: Claude와 같이 쓰는 todo 목록")
+    fp.add_argument("-f", "--file", help=_("목록 이름·번호·경로 (생략하면 지금 폴더 목록, 없으면 첫 목록)"))
+    ap = argparse.ArgumentParser(prog="jua", description=_("jua-list: Claude와 같이 쓰는 todo 목록"))
     sp = ap.add_subparsers(dest="cmd", required=True)
 
-    sp.add_parser("lists", help="등록된 목록과 개수")
-    p = sp.add_parser("list", parents=[fp], help="항목 보기")
+    sp.add_parser("lists", help=_("등록된 목록과 개수"))
+    p = sp.add_parser("list", parents=[fp], help=_("항목 보기"))
     p.add_argument("--status", choices=list(core.MARK))
-    p.add_argument("--claude", action="store_true", help="Claude 맡긴 것만")
+    p.add_argument("--claude", action="store_true", help=_("Claude 맡긴 것만"))
     p.add_argument("--hide-done", action="store_true")
-    p.add_argument("--all", action="store_true", help="모든 목록")
-    p = sp.add_parser("add", parents=[fp], help="항목 추가")
+    p.add_argument("--all", action="store_true", help=_("모든 목록"))
+    p = sp.add_parser("add", parents=[fp], help=_("항목 추가"))
     p.add_argument("text")
     p.add_argument("-s", "--section")
-    p.add_argument("--claude", action="store_true", help="Claude에게 맡김")
-    p.add_argument("--create", action="store_true", help="섹션 없으면 만듦")
-    for name, hlp in [("done", "완료"), ("undo", "대기로 되돌림"), ("rm", "삭제")]:
-        sp.add_parser(name, parents=[fp], help=hlp).add_argument("ref", help="id, 번호, 글자 일부")
-    p = sp.add_parser("status", parents=[fp], help="상태 바꿈")
+    p.add_argument("--claude", action="store_true", help=_("Claude에게 맡김"))
+    p.add_argument("--create", action="store_true", help=_("섹션 없으면 만듦"))
+    for name, hlp in [("done", _("완료")), ("undo", _("대기로 되돌림")), ("rm", _("삭제"))]:
+        sp.add_parser(name, parents=[fp], help=hlp).add_argument("ref", help=_("id, 번호, 글자 일부"))
+    p = sp.add_parser("status", parents=[fp], help=_("상태 바꿈"))
     p.add_argument("ref")
     p.add_argument("status", choices=list(core.MARK))
-    p = sp.add_parser("edit", parents=[fp], help="내용 고침")
+    p = sp.add_parser("edit", parents=[fp], help=_("내용 고침"))
     p.add_argument("ref")
     p.add_argument("text")
-    p = sp.add_parser("move", parents=[fp], help="옮김")
+    p = sp.add_parser("move", parents=[fp], help=_("옮김"))
     p.add_argument("ref")
     g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--to", help="다른 섹션 끝으로")
+    g.add_argument("--to", help=_("다른 섹션 끝으로"))
     g.add_argument("--up", type=int)
     g.add_argument("--down", type=int)
-    p = sp.add_parser("claude", parents=[fp], help="Claude에게 맡김(on)/해제(off)")
+    p = sp.add_parser("claude", parents=[fp], help=_("Claude에게 맡김(on)/해제(off)"))
     p.add_argument("ref")
     p.add_argument("onoff", choices=["on", "off"], nargs="?", default="on")
-    p = sp.add_parser("result", parents=[fp], help="결과 한 줄 남김 (빈 문자열이면 지움)")
+    p = sp.add_parser("result", parents=[fp], help=_("결과 한 줄 남김 (빈 문자열이면 지움)"))
     p.add_argument("ref")
     p.add_argument("text")
-    p = sp.add_parser("block", parents=[fp], help="막힘으로 바꾸고 질문 남김")
+    p = sp.add_parser("block", parents=[fp], help=_("막힘으로 바꾸고 질문 남김"))
     p.add_argument("ref")
     p.add_argument("question")
-    p = sp.add_parser("new", help="새 목록 파일 만들고 등록")
+    p = sp.add_parser("new", help=_("새 목록 파일 만들고 등록"))
     p.add_argument("path")
     p.add_argument("--title")
-    p.add_argument("--sections", help="쉼표로 구분")
+    p.add_argument("--sections", help=_("쉼표로 구분"))
     p.add_argument("--name")
-    p.add_argument("--cwd", help="Claude 작업 폴더")
+    p.add_argument("--cwd", help=_("Claude 작업 폴더"))
     p.add_argument("--no-register", action="store_true")
-    p = sp.add_parser("register", help="기존 .md 등록")
+    p = sp.add_parser("register", help=_("기존 .md 등록"))
     p.add_argument("path")
     p.add_argument("--name")
     p.add_argument("--cwd")
-    sp.add_parser("unregister", help="등록 해제").add_argument("file")
-    p = sp.add_parser("entry", help="목록 이름·작업 폴더 바꿈")
+    sp.add_parser("unregister", help=_("등록 해제")).add_argument("file")
+    p = sp.add_parser("entry", help=_("목록 이름·작업 폴더 바꿈"))
     p.add_argument("file")
     p.add_argument("--name")
     p.add_argument("--cwd")
-    p = sp.add_parser("config", help="설정 보기·바꿈 (예: jua config alpha 220)")
+    p = sp.add_parser("config", help=_("설정 보기·바꿈 (예: jua config alpha 220)"))
     p.add_argument("key", nargs="?")
     p.add_argument("value", nargs="?")
-    p = sp.add_parser("install", help="jua 명령을 PATH에 설치")
-    p.add_argument("--mcp", action="store_true", help="Claude Code·데스크톱 앱에 MCP 서버도 등록")
-    p.add_argument("--startup", action="store_true", help="로그인 시 위젯 자동 실행")
-    sp.add_parser("widget", help="위젯 실행")
-    sp.add_parser("home", help="데이터 폴더(설정·실행 기록) 위치")
+    p = sp.add_parser("install", help=_("jua 명령을 PATH에 설치"))
+    p.add_argument("--mcp", action="store_true", help=_("Claude Code·데스크톱 앱에 MCP 서버도 등록"))
+    p.add_argument("--startup", action="store_true", help=_("로그인 시 위젯 자동 실행"))
+    sp.add_parser("widget", help=_("위젯 실행"))
+    sp.add_parser("home", help=_("데이터 폴더(설정·실행 기록) 위치"))
 
     a = ap.parse_args(argv)
     f = getattr(a, "file", None)
@@ -373,7 +384,7 @@ def main(argv=None):
         print(r)
         return 0
     except JuaError as e:
-        print(f"오류: {e}", file=sys.stderr)
+        print(_("오류: {0}").format(e), file=sys.stderr)
         return 1
 
 

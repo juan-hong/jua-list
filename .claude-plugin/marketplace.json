@@ -5,14 +5,14 @@
     "url": "https://github.com/juan-hong"
   },
   "metadata": {
-    "description": "jua_list: a desktop todo widget shared by you and Claude"
+    "description": "jua-list: a desktop todo widget shared by you and Claude"
   },
   "plugins": [
     {
       "name": "jua-list",
       "source": "./",
       "description": "Desktop todo widget for Windows that Claude can read, edit and work on.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "license": "MIT",
       "keywords": ["todo", "widget", "windows", "mcp"]
     }

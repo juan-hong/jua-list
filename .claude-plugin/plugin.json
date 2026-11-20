@@ -1,6 +1,6 @@
 {
   "name": "jua-list",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Desktop todo widget for Windows that Claude can read, edit and work on. Tag a task @claude, press ▶ and Claude Code does it, then waits for your review.",
   "author": {
     "name": "juan-hong",
@@ -12,7 +12,7 @@
   "keywords": ["todo", "widget", "desktop", "windows", "task", "markdown", "mcp", "agent"],
   "icon": ".claude-plugin/icon.png",
   "mcpServers": {
-    "jua_list": {
+    "jua-list": {
       "command": "python",
       "args": ["${CLAUDE_PLUGIN_ROOT}/jua/jua_mcp.py"]
     }

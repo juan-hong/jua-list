@@ -1,4 +1,4 @@
-"""jua_list 테스트. 실행: python -m unittest discover -s tests"""
+"""jua-list 테스트. 실행: python -m unittest discover -s tests"""
 import io
 import json
 import os
@@ -11,6 +11,7 @@ from contextlib import redirect_stderr, redirect_stdout
 
 TMP = tempfile.mkdtemp(prefix="jua_test_")
 os.environ["JUA_HOME"] = os.path.join(TMP, "home")
+os.environ["JUA_LANG"] = "ko"  # 아래 검사 문구는 한국어 기준. 영어는 TestEnglish
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "jua"))
 
@@ -223,7 +224,7 @@ class TestMcp(Base):
                        "params": {"name": "jua_list", "arguments": {"file": "없음"}}},
                       {"jsonrpc": "2.0", "id": 6, "method": "nope"})
         self.assertEqual([x["id"] for x in r], [1, 2, 3, 4, 5, 6])
-        self.assertEqual(r[0]["result"]["serverInfo"]["name"], "jua_list")
+        self.assertEqual(r[0]["result"]["serverInfo"]["name"], "jua-list")
         self.assertGreaterEqual(len(r[1]["result"]["tools"]), 12)
         self.assertFalse(r[2]["result"]["isError"])
         self.assertFalse(r[3]["result"]["isError"])
@@ -285,6 +286,38 @@ class TestRun(Base):
         d = self.doc()
         with self.assertRaises(core.JuaError):
             core.start_run(core.load_cfg(), d, d.resolve("폴더"))
+
+
+class TestEnglish(Base):
+    def en(self, *args):
+        env = dict(os.environ, JUA_LANG="en", PYTHONIOENCODING="utf-8")
+        p = subprocess.run([sys.executable, os.path.join(ROOT, "jua", "jua.py"), *args], env=env,
+                           capture_output=True, timeout=60)
+        return p.returncode, p.stdout.decode("utf-8") + p.stderr.decode("utf-8")
+
+    def test_english_output_and_result_marker(self):
+        code, out = self.en("add", "hello", "-f", "t", "-s", "A")
+        self.assertEqual(code, 0)
+        self.assertIn("Added:", out)
+        self.en("result", "hello", "done it", "-f", "t")
+        self.assertIn("  - Result: done it", self.text())
+        # 한국어 모드에서도 영어 결과 줄을 읽음
+        self.assertEqual(self.doc().resolve("hello")["result"], "done it")
+        code, out = self.en("add", "x", "-f", "t", "-s", "Nope")
+        self.assertEqual(code, 1)
+        self.assertIn("No section 'Nope'", out)
+        self.assertNotRegex(self.en("--help")[1], r"[가-힣]")
+
+    def test_translations_complete(self):
+        import ast
+        import jua_i18n
+        for f in ("jua_core.py", "jua.py", "widget.py", "jua_mcp.py"):
+            with open(os.path.join(ROOT, "jua", f), encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "_" and n.args \
+                        and isinstance(n.args[0], ast.Constant):
+                    self.assertIn(n.args[0].value, jua_i18n.EN, f"{f}: {n.args[0].value}")
 
 
 if __name__ == "__main__":

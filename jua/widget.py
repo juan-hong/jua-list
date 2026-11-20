@@ -1,4 +1,4 @@
-"""jua_list 바탕화면 위젯. 등록한 .md 체크리스트를 보여주고 고치고, Claude에게 일을 맡김."""
+"""jua-list 바탕화면 위젯. 등록한 .md 체크리스트를 보여주고 고치고, Claude에게 일을 맡김."""
 import ctypes
 import os
 import re
@@ -12,12 +12,13 @@ from tkinter import ttk
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import jua_core as core  # noqa: E402
 from jua_core import JuaError, log  # noqa: E402
+from jua_i18n import _  # noqa: E402
 
 BG, CARD, LINE = "#18191e", "#23252d", "#2e3039"
 FG, DIM, ACC, GOOD, BAD, WARN = "#e6e7ea", "#7d808a", "#8ab4f8", "#7dd3a0", "#f28b82", "#f6c177"
 FAMILY = "Malgun Gothic"
 RADIUS = 14
-PLACEHOLDER = "할 일 추가 후 Enter  (앞에 @claude 붙이면 Claude에게 맡김)"
+PLACEHOLDER = _("할 일 추가 후 Enter  (앞에 @claude 붙이면 Claude에게 맡김)")
 
 # ---------- Win32 ----------
 user32 = ctypes.windll.user32
@@ -112,7 +113,7 @@ class App:
         self.tab = min(int(self.cfg.get("tab", 0)), max(len(self.docs) - 1, 0))
 
         r = self.root = tk.Tk()
-        r.title("jua_list")
+        r.title("jua-list")
         r.overrideredirect(True)
         r.configure(bg=BG)
         r.report_callback_exception = lambda *a: log("".join(traceback.format_exception(*a)))
@@ -166,7 +167,7 @@ class App:
                 user32.SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED)
                 self.host = host
             else:
-                log("바탕화면 창 못 찾음. bottom 모드로 대체")
+                log(_("바탕화면 창 못 찾음. bottom 모드로 대체"))
         self.apply_alpha()
         self.place(self.cfg["x"], self.cfg["y"], self.cfg["w"], self.cfg["h"])
 
@@ -276,9 +277,9 @@ class App:
         self.run_lbl.pack(side="right", padx=4)
 
         bn = self.banner = tk.Frame(fr, bg=CARD, cursor="fleur")
-        bl = tk.Label(bn, text="끌어서 옮기기 · ◢ 끌어서 크기 조절", bg=CARD, fg=FG, font=f["s"], cursor="fleur")
+        bl = tk.Label(bn, text=_("끌어서 옮기기 · ◢ 끌어서 크기 조절"), bg=CARD, fg=FG, font=f["s"], cursor="fleur")
         bl.pack(side="left", padx=10, pady=6)
-        ok = tk.Label(bn, text="완료", bg=ACC, fg=BG, font=f["b"], cursor="hand2", padx=12, pady=2)
+        ok = tk.Label(bn, text=_("완료"), bg=ACC, fg=BG, font=f["b"], cursor="hand2", padx=12, pady=2)
         ok.pack(side="right", padx=6, pady=4)
         ok.bind("<Button-1>", lambda e: self.set_moving(False))
         self._drag_bind(bn, "move")
@@ -378,13 +379,13 @@ class App:
             b.bind("<Button-1>", lambda e, i=i: self.switch(i))
             if not on:
                 self._hover_color(b, DIM, FG)
-        self.run_lbl.configure(text=f"● Claude 작업 {len(self.runs)}" if self.runs else "")
+        self.run_lbl.configure(text=_("● Claude 작업 {0}").format(len(self.runs)) if self.runs else "")
 
         for c in self.body.winfo_children():
             c.destroy()
         doc = self.doc()
         if not doc:
-            self._msg("등록된 목록 없음. jua new <경로> 또는 ⋯ → 설정 파일 열기")
+            self._msg(_("등록된 목록 없음. jua new <경로> 또는 ⋯ → 설정 파일 열기"))
             self.sec_box["values"] = []
             return
         if doc.error:
@@ -400,10 +401,10 @@ class App:
                 shown = True
                 self._section(doc, s, s["title"] in collapsed, wrap)
         if not shown and not doc.error:
-            self._msg("할 일이 없음. 아래 칸에서 추가")
+            self._msg(_("할 일이 없음. 아래 칸에서 추가"))
 
         self.sec_list = [(s["head"], s["title"]) for s in secs if s["head"] >= 0]
-        names = [t for _, t in self.sec_list] or ["(파일 끝)"]
+        names = [t for _, t in self.sec_list] or [_("(파일 끝)")]
         self.sec_box["values"] = names
         if self.sec_var.get() not in names:
             first = next((s["title"] for s in secs if s["items"] and s["head"] >= 0), names[0])
@@ -442,7 +443,7 @@ class App:
         for task in s["items"]:
             if not (hide and task["status"] == "done"):
                 self._row(doc, task, wrap)
-        add = tk.Label(self.body, text="+ 추가", bg=BG, fg=DIM, font=f["s"], cursor="hand2", anchor="w")
+        add = tk.Label(self.body, text=_("+ 추가"), bg=BG, fg=DIM, font=f["s"], cursor="hand2", anchor="w")
         add.pack(fill="x", padx=(16 + self.box + 8, 12), pady=(2, 0))
         add.bind("<Button-1>", lambda e: self.inline_add(doc, s, add))
         self._hover_color(add, DIM, ACC)
@@ -487,7 +488,7 @@ class App:
             if t["claude"]:
                 parts.append(self._chip(chips, "Claude", ACC))
             if st != "todo" and st != "done":
-                parts.append(self._chip(chips, ("작업 중" if running else core.STATUS_KO[st]),
+                parts.append(self._chip(chips, (_("작업 중") if running else core.STATUS_KO[st]),
                                         {"doing": ACC, "review": WARN, "blocked": BAD}[st]))
         if t["result"]:
             res = tk.Label(mid, text="↳ " + t["result"], bg=BG, fg=DIM, font=f["xs"], justify="left", anchor="w",
@@ -545,7 +546,7 @@ class App:
     def click_box(self, doc, t):
         nxt = {"todo": "done", "done": "todo", "review": "done", "blocked": "todo"}.get(t["status"])
         if nxt is None:
-            self.toast("Claude가 작업 중. ⋯ 버튼 대신 ■로 멈출 수 있음", ACC)
+            self.toast(_("Claude가 작업 중. ⋯ 버튼 대신 ■로 멈출 수 있음"), ACC)
             return
         self.safe(doc.set_status, t, nxt)
         self.render()
@@ -565,12 +566,12 @@ class App:
 
     def delete(self, doc, t):
         if t["id"] in self.runs:
-            self.toast("작업 중인 항목은 먼저 ■로 멈추세요")
+            self.toast(_("작업 중인 항목은 먼저 ■로 멈추세요"))
             return
         r = self.safe(doc.delete, t)
         if r:
             self.undo = (doc.path, *r)
-            self.toast("지움. ⋯ → 삭제 되돌리기", DIM, 4000)
+            self.toast(_("지움. ⋯ → 삭제 되돌리기"), DIM, 4000)
         self.render()
 
     def undo_delete(self):
@@ -585,12 +586,12 @@ class App:
 
     def run(self, doc, t):
         if t["status"] == "done":
-            self.toast("완료된 항목. 먼저 체크를 푸세요", DIM)
+            self.toast(_("완료된 항목. 먼저 체크를 푸세요"), DIM)
             return
         r = self.safe(core.start_run, self.cfg, doc, t)
         if r:
             self.runs[r["id"]] = r
-            self.toast(f"Claude 시작: {t['text'][:30]}", ACC, 3000)
+            self.toast(_("Claude 시작: {0}").format(t['text'][:30]), ACC, 3000)
         self.render()
 
     def stop(self, iid):
@@ -600,7 +601,7 @@ class App:
             r["proc"].wait(5)
             doc = next((d for d in self.docs if d.path == r["path"]), None)
             if doc:
-                self.safe(core.finish_run, r, doc, "사용자가 멈춤")
+                self.safe(core.finish_run, r, doc, _("사용자가 멈춤"))
         self.render()
 
     def check_runs(self):
@@ -614,7 +615,7 @@ class App:
             if code is None:
                 core.stop_run(r)
                 r["proc"].wait(5)
-                reason = "시간 초과"
+                reason = _("시간 초과")
             del self.runs[iid]
             doc = next((d for d in self.docs if d.path == r["path"]), None) or core.Doc(r["path"])
             self.safe(core.finish_run, r, doc, reason)
@@ -690,47 +691,47 @@ class App:
         m = self._menu()
         if t["claude"]:
             if t["id"] in self.runs:
-                m.add_command(label="■ Claude 멈추기", command=lambda: self.stop(t["id"]))
+                m.add_command(label=_("■ Claude 멈추기"), command=lambda: self.stop(t["id"]))
             else:
-                m.add_command(label="▶ Claude 실행", command=lambda: self.run(doc, t))
-        m.add_command(label="Claude 맡김 해제" if t["claude"] else "@ Claude에게 맡기기",
+                m.add_command(label=_("▶ Claude 실행"), command=lambda: self.run(doc, t))
+        m.add_command(label=_("Claude 맡김 해제") if t["claude"] else _("@ Claude에게 맡기기"),
                       command=lambda: self.button("assign", doc, t, row, mid, lbl, btns))
         sm = self._menu()
         for k in core.MARK:
             sm.add_command(label=core.STATUS_KO[k], command=lambda k=k: (self.safe(doc.set_status, t, k), self.render()))
-        m.add_cascade(label="상태 바꾸기", menu=sm)
+        m.add_cascade(label=_("상태 바꾸기"), menu=sm)
         if t["result"]:
-            m.add_command(label="결과 줄 지우기", command=lambda: (self.safe(doc.set_result, t, ""), self.render()))
+            m.add_command(label=_("결과 줄 지우기"), command=lambda: (self.safe(doc.set_result, t, ""), self.render()))
         m.add_separator()
-        m.add_command(label="위로", command=lambda: (self.safe(doc.move, t, None, -1), self.render()))
-        m.add_command(label="아래로", command=lambda: (self.safe(doc.move, t, None, 1), self.render()))
+        m.add_command(label=_("위로"), command=lambda: (self.safe(doc.move, t, None, -1), self.render()))
+        m.add_command(label=_("아래로"), command=lambda: (self.safe(doc.move, t, None, 1), self.render()))
         mv = self._menu()
         for _, name in getattr(self, "sec_list", []):
             if name != t["section"]:
                 mv.add_command(label=name, command=lambda n=name: (self.safe(doc.move, t, n), self.render()))
-        m.add_cascade(label="섹션 옮기기", menu=mv)
+        m.add_cascade(label=_("섹션 옮기기"), menu=mv)
         m.add_separator()
-        m.add_command(label="수정", command=lambda: self.start_edit(doc, t, row, mid, lbl, btns))
-        m.add_command(label="삭제", command=lambda: self.delete(doc, t))
+        m.add_command(label=_("수정"), command=lambda: self.start_edit(doc, t, row, mid, lbl, btns))
+        m.add_command(label=_("삭제"), command=lambda: self.delete(doc, t))
         m.tk_popup(*cursor())
 
     def menu(self):
         m = self._menu()
-        m.add_command(label="완료 항목 보이기" if self.cfg.get("hide_done") else "완료 항목 숨기기",
+        m.add_command(label=_("완료 항목 보이기") if self.cfg.get("hide_done") else _("완료 항목 숨기기"),
                       command=lambda: self.set_cfg(hide_done=not self.cfg.get("hide_done")))
-        m.add_command(label="창 옮기기·크기 조절", command=lambda: self.set_moving(True))
-        m.add_command(label="글자 크게", command=lambda: self.set_cfg(font_size=min(16, self.cfg["font_size"] + 1)))
-        m.add_command(label="글자 작게", command=lambda: self.set_cfg(font_size=max(8, self.cfg["font_size"] - 1)))
+        m.add_command(label=_("창 옮기기·크기 조절"), command=lambda: self.set_moving(True))
+        m.add_command(label=_("글자 크게"), command=lambda: self.set_cfg(font_size=min(16, self.cfg["font_size"] + 1)))
+        m.add_command(label=_("글자 작게"), command=lambda: self.set_cfg(font_size=max(8, self.cfg["font_size"] - 1)))
         if self.undo:
-            m.add_command(label="삭제 되돌리기", command=self.undo_delete)
+            m.add_command(label=_("삭제 되돌리기"), command=self.undo_delete)
         m.add_separator()
         if self.doc():
-            m.add_command(label="md 파일 열기", command=lambda: os.startfile(self.doc().path))
-        m.add_command(label="Claude 실행 기록 폴더", command=self.open_runs)
-        m.add_command(label="설정 파일 열기", command=lambda: os.startfile(core.CFG_PATH))
-        m.add_command(label="다시 읽기", command=self.reload)
+            m.add_command(label=_("md 파일 열기"), command=lambda: os.startfile(self.doc().path))
+        m.add_command(label=_("Claude 실행 기록 폴더"), command=self.open_runs)
+        m.add_command(label=_("설정 파일 열기"), command=lambda: os.startfile(core.CFG_PATH))
+        m.add_command(label=_("다시 읽기"), command=self.reload)
         m.add_separator()
-        m.add_command(label="종료", command=self.exit)
+        m.add_command(label=_("종료"), command=self.exit)
         m.tk_popup(*cursor())
 
     def open_runs(self):
@@ -776,7 +777,7 @@ class App:
 
     def exit(self):
         if self.runs:
-            self.toast(f"Claude 작업 {len(self.runs)}개 진행 중. 위젯을 꺼도 작업은 계속되지만 상태 정리는 안 됨", WARN)
+            self.toast(_("Claude 작업 {0}개 진행 중. 위젯을 꺼도 작업은 계속되지만 상태 정리는 안 됨").format(len(self.runs)), WARN)
         self.quit = True
         self.root.destroy()
 
@@ -812,7 +813,7 @@ class App:
 
 
 def main():
-    kernel32.CreateMutexW(None, False, "Local\\jua_list")
+    kernel32.CreateMutexW(None, False, "Local\\jua-list")
     if kernel32.GetLastError() == 183:  # 이미 실행 중
         return
     fails = 0
@@ -827,10 +828,10 @@ def main():
             break
         fails = fails + 1 if not app else 0
         if fails >= 5:
-            log("시작 계속 실패. 종료")
+            log(_("시작 계속 실패. 종료"))
             break
         # 탐색기 재시작 등으로 부모 창 날아감. 잠깐 쉬고 다시 띄움
-        log("창이 닫힘. 다시 띄움")
+        log(_("창이 닫힘. 다시 띄움"))
         time.sleep(3)
 
 

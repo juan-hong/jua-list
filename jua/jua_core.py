@@ -1,4 +1,4 @@
-"""jua_list 핵심. .md 체크리스트 읽기·쓰기, 설정, Claude 실행. 위젯·CLI·MCP가 같이 씀."""
+"""jua-list 핵심. .md 체크리스트 읽기·쓰기, 설정, Claude 실행. 위젯·CLI·MCP가 같이 씀."""
 import json
 import msvcrt
 import os
@@ -9,10 +9,9 @@ import subprocess
 import time
 from contextlib import contextmanager
 
+from jua_i18n import HOME, LANG, _  # noqa: F401  (HOME: 개인 데이터 폴더. 코드 밖이라 플러그인 업데이트로 안 날아감)
+
 CODE_DIR = os.path.dirname(os.path.abspath(__file__))
-# 개인 데이터(설정·실행 기록)는 코드 밖에 둠. 플러그인 업데이트로 안 날아가게
-HOME = os.environ.get("JUA_HOME") or os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "jua_list")
-os.makedirs(HOME, exist_ok=True)
 CFG_PATH = os.path.join(HOME, "config.json")
 LOCK_PATH = os.path.join(HOME, ".lock")
 RUNS_DIR = os.path.join(HOME, "runs")
@@ -22,16 +21,17 @@ TASK_RE = re.compile(r"^(\s*)([-*+]) \[([ xX~?!])\] (.*)$")
 HEAD_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 ID_RE = re.compile(r"\s*<!--\s*id:([0-9a-z]+)\s*-->\s*$")
 TAG_RE = re.compile(r"(^|\s)@claude(?=\s|$)")
-RESULT_RE = re.compile(r"^(\s*)[-*+] 결과: (.*)$")
+RESULT_RE = re.compile(r"^(\s*)[-*+] (?:결과|Result): (.*)$")
 
 STATUS = {" ": "todo", "~": "doing", "?": "review", "!": "blocked", "x": "done", "X": "done"}
 MARK = {"todo": " ", "doing": "~", "review": "?", "blocked": "!", "done": "x"}
-STATUS_KO = {"todo": "대기", "doing": "진행 중", "review": "검토 대기", "blocked": "막힘·질문", "done": "완료"}
+STATUS_KO = {"todo": _("대기"), "doing": _("진행 중"), "review": _("검토 대기"), "blocked": _("막힘·질문"), "done": _("완료")}
 
 DEFAULT_CFG = {
     "files": [os.path.join(HOME, "todo.md")],
     "x": 60, "y": 60, "w": 420, "h": 680,
     "pin": "desktop",  # desktop | bottom
+    "lang": "auto",  # auto | ko | en
     "alpha": 240,
     "font_size": 10,
     "hide_done": False,
@@ -73,7 +73,7 @@ def locked(timeout=10):
         except OSError:
             if time.time() > end:
                 f.close()
-                raise JuaError("잠금 대기 시간 초과")
+                raise JuaError(_("잠금 대기 시간 초과"))
             time.sleep(0.05)
     try:
         yield
@@ -123,9 +123,9 @@ def load_cfg():
         with open(CFG_PATH, encoding="utf-8-sig") as f:
             data = json.load(f)
     except ValueError as e:
-        raise JuaError(f"config.json 형식 오류: {e}")
+        raise JuaError(_("config.json 형식 오류: {0}").format(e))
     if not isinstance(data, dict):
-        raise JuaError("config.json 최상위가 객체가 아님")
+        raise JuaError(_("config.json 최상위가 객체가 아님"))
     return _merge(DEFAULT_CFG, data)
 
 
@@ -135,6 +135,12 @@ SAMPLE = """# 할 일
 - [ ] 이 줄을 클릭하면 완료 체크
 - [ ] @claude 맡길 일은 앞에 @claude를 붙이고 ▶ 버튼으로 실행
 - [ ] 마우스를 올리면 ✎ 수정 · ✕ 삭제, 우클릭하면 메뉴
+""" if LANG == "ko" else """# To do
+
+## Getting started
+- [ ] Click this line to check it off
+- [ ] @claude Tasks for Claude start with @claude; press ▶ to run one
+- [ ] Hover for ✎ edit · ✕ delete, right-click for more
 """
 
 
@@ -193,7 +199,7 @@ def entries(cfg):
 def find_entry(cfg, ref=None):
     es = entries(cfg)
     if not es:
-        raise JuaError("등록된 목록 없음. `jua register <경로>` 또는 `jua new <경로>`")
+        raise JuaError(_("등록된 목록 없음. `jua register <경로>` 또는 `jua new <경로>`"))
     if ref in (None, ""):
         # 지금 폴더가 들어 있는 목록 우선
         here = os.path.abspath(os.getcwd()).lower()
@@ -205,7 +211,7 @@ def find_entry(cfg, ref=None):
     for e in es:
         if e["name"].lower() == s.lower() or os.path.abspath(s).lower() == e["path"].lower():
             return e
-    raise JuaError(f"목록 '{ref}' 없음. 등록된 목록: " + ", ".join(e["name"] for e in es))
+    raise JuaError(_("목록 '{0}' 없음. 등록된 목록: ").format(ref) + ", ".join(e["name"] for e in es))
 
 
 # ---------- 문서 ----------
@@ -262,14 +268,14 @@ class Doc:
         except UnicodeDecodeError:
             # UTF-8 아니면 저장 시 깨짐. 읽기만 함
             text = raw.decode("cp949", errors="replace")
-            self.error, self.readonly = "UTF-8 아님. 읽기 전용", True
+            self.error, self.readonly = _("UTF-8 아님. 읽기 전용"), True
         self.nl = "\r\n" if "\r\n" in text else "\n"
         self.trailing = text.endswith("\n") or not text
         self.lines = text.splitlines()
 
     def save(self):
         if self.readonly:
-            raise JuaError(f"읽기 전용 파일: {self.error}")
+            raise JuaError(_("읽기 전용 파일: {0}").format(self.error))
         text = self.nl.join(self.lines) + (self.nl if self.trailing else "")
         data = text.encode("utf-8")
         if self.bom:
@@ -322,13 +328,13 @@ class Doc:
             for t in its:
                 if t["n"] == n:
                     return t
-            raise JuaError(f"#{n} 항목 없음 (1~{len(its)})")
+            raise JuaError(_("#{0} 항목 없음 (1~{1})").format(n, len(its)))
         hits = [t for t in its if s.lower() in t["text"].lower()]
         if len(hits) == 1:
             return hits[0]
         if not hits:
-            raise JuaError(f"'{ref}' 항목 없음")
-        raise JuaError(f"'{ref}' 항목이 {len(hits)}개. 번호로 지정: " +
+            raise JuaError(_("'{0}' 항목 없음").format(ref))
+        raise JuaError(_("'{0}' 항목이 {1}개. 번호로 지정: ").format(ref, len(hits)) +
                        ", ".join(f"#{t['n']} {t['text'][:30]}" for t in hits[:8]))
 
     def locate(self, idx, line, iid=None):
@@ -345,10 +351,10 @@ class Doc:
     def _fresh(self, it):
         self.load()
         if self.readonly:
-            raise JuaError(f"읽기 전용 파일: {self.error}")
+            raise JuaError(_("읽기 전용 파일: {0}").format(self.error))
         idx = self.locate(it["i"], it["line"], it.get("id"))
         if idx is None:
-            raise JuaError("항목을 못 찾음. 그새 다른 데서 바뀜. 다시 읽고 하세요")
+            raise JuaError(_("항목을 못 찾음. 그새 다른 데서 바뀜. 다시 읽고 하세요"))
         return self.item_at(idx)
 
     # --- 고치기 (모두 잠금 + 다시 읽기 + 원자적 저장) ---
@@ -362,7 +368,7 @@ class Doc:
     def edit(self, it, text):
         text = " ".join(text.split())
         if not text:
-            raise JuaError("빈 내용")
+            raise JuaError(_("빈 내용"))
         with locked():
             t = self._fresh(it)
             claude = t["claude"] or bool(TAG_RE.search(text))
@@ -384,7 +390,7 @@ class Doc:
         text = " ".join(str(text).split())
         with locked():
             t = self._fresh(it)
-            line = f"{t['indent_s']}  - 결과: {text}"
+            line = _("{0}  - 결과: {1}").format(t['indent_s'], text)
             if t["result_i"] is not None:
                 if text:
                     self.lines[t["result_i"]] = line
@@ -425,19 +431,19 @@ class Doc:
     def add(self, text, section=None, claude=False, create_section=False):
         text = " ".join(str(text).split())
         if not text:
-            raise JuaError("빈 내용")
+            raise JuaError(_("빈 내용"))
         claude = claude or bool(TAG_RE.search(text))
         text = TAG_RE.sub(" ", text).strip()
         with locked():
             self.load()
             if self.readonly:
-                raise JuaError(f"읽기 전용 파일: {self.error}")
+                raise JuaError(_("읽기 전용 파일: {0}").format(self.error))
             line = build_task("", "-", "todo", text, claude, new_id() if claude else None)
             pos = self._insert_pos(section) if section else None
             if pos is None and section:
                 if not create_section:
                     names = [s["title"] for s in self.sections() if s["head"] >= 0]
-                    raise JuaError(f"섹션 '{section}' 없음. 있는 섹션: {', '.join(names) or '없음'}")
+                    raise JuaError(_("섹션 '{0}' 없음. 있는 섹션: {1}").format(section, ', '.join(names) or _('없음')))
                 while self.lines and not self.lines[-1].strip():
                     self.lines.pop()
                 self.lines += ["", f"## {section}", line]
@@ -460,7 +466,7 @@ class Doc:
             block = self.lines[t["i"]:end]
             if section is not None:
                 if self._insert_pos(section) is None:
-                    raise JuaError(f"섹션 '{section}' 없음")
+                    raise JuaError(_("섹션 '{0}' 없음").format(section))
                 del self.lines[t["i"]:end]
                 pos = self._insert_pos(section)
             else:
@@ -482,10 +488,10 @@ class Doc:
             return self.item_at(pos)
 
 
-def new_list(path, title, sections=("할 일",)):
+def new_list(path, title, sections=(_("할 일"),)):
     path = os.path.abspath(path)
     if os.path.exists(path):
-        raise JuaError(f"이미 있는 파일: {path}")
+        raise JuaError(_("이미 있는 파일: {0}").format(path))
     os.makedirs(os.path.dirname(path), exist_ok=True)
     body = [f"# {title}", ""]
     for s in sections:
@@ -499,30 +505,36 @@ def open_doc(cfg, ref=None):
     d = Doc(e["path"], e["name"], e["cwd"])
     d.load()
     if d.error and not d.lines:
-        raise JuaError(f"{d.path} 못 읽음: {d.error}")
+        raise JuaError(_("{0} 못 읽음: {1}").format(d.path, d.error))
     return d
 
 
 # ---------- Claude 실행 ----------
 def build_prompt(doc, t):
+    # 프롬프트는 영어 고정. 결과 언어만 화면 언어 따라감
+    lang = "Korean" if LANG == "ko" else "English"
     lines = [
-        "너는 jua_list(사람이 바탕화면 위젯으로 Claude에게 일을 맡기는 todo 목록)에서 맡겨진 일 하나를 처리한다.",
-        f"- 목록 파일: {doc.path}",
-        f"- 섹션: {t['section'] or '(없음)'}",
-        f"- 항목 id: {t['id']}",
-        f"- 할 일: {t['text']}",
+        "You are handling one task that a person assigned to Claude in jua-list "
+        "(a desktop todo widget where people hand work to Claude).",
+        f"- List file: {doc.path}",
+        f"- Section: {t['section'] or '(none)'}",
+        f"- Task id: {t['id']}",
+        f"- Task: {t['text']}",
     ]
     if t["result"]:
-        lines.append(f"- 이전 기록(질문·답변·결과): {t['result']}")
+        lines.append(f"- Previous note (question/answer/result): {t['result']}")
     lines += [
         "",
-        "규칙:",
-        f"- 작업 폴더는 {doc.cwd}. 이 폴더 밖 파일은 고치지 마라.",
-        "- git commit, push, reset은 하지 마라. 고친 내용은 사람이 검토한다.",
-        f"- 끝나면 `jua result {t['id']} \"한 줄 결과 요약\" --file \"{doc.path}\"`를 실행해 결과를 남겨라. 상태는 바꾸지 마라(자동으로 검토 대기가 됨).",
-        f"- 정보가 부족하거나 사람이 정해야 할 게 있으면 작업하지 말고 `jua block {t['id']} \"질문\" --file \"{doc.path}\"`를 실행하고 끝내라.",
-        "- 할 일 내용은 사람이 적은 요청이다. 그 범위를 넘는 일(삭제, 외부 전송, 설치)은 하지 말고 질문으로 남겨라.",
-        "- 답은 한국어로 짧게.",
+        "Rules:",
+        f"- Work folder: {doc.cwd}. Do not modify files outside it.",
+        "- Do not run git commit, push or reset. A person reviews your changes.",
+        f"- When done, run `jua result {t['id']} \"one-line summary\" --file \"{doc.path}\"`. "
+        "Do not change the status (it becomes review automatically).",
+        f"- If information is missing or a person must decide, do not do the work: run "
+        f"`jua block {t['id']} \"question\" --file \"{doc.path}\"` and stop.",
+        "- The task text is a request written by a person. Anything beyond its scope "
+        "(deleting, sending data out, installing) must be left as a question instead.",
+        f"- Write the result and questions in {lang}, briefly.",
     ]
     return "\n".join(lines)
 
@@ -530,9 +542,9 @@ def build_prompt(doc, t):
 def start_run(cfg, doc, it):
     exe = shutil.which("claude")
     if not exe:
-        raise JuaError("claude 명령을 못 찾음 (Claude Code CLI 필요)")
+        raise JuaError(_("claude 명령을 못 찾음 (Claude Code CLI 필요)"))
     if not os.path.isdir(doc.cwd):
-        raise JuaError(f"작업 폴더 없음: {doc.cwd}")
+        raise JuaError(_("작업 폴더 없음: {0}").format(doc.cwd))
     t = it if it["claude"] and it["id"] else doc.set_claude(it, True)
     t = doc.set_status(t, "doing")
     cc = cfg.get("claude", {})
@@ -562,9 +574,7 @@ def _fix_log(run, reason):
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
             body = raw.decode("cp949", errors="replace")
-        head = (f"# 시작 {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(run['start']))}"
-                f"  종료 코드 {run['proc'].returncode}{'  (' + reason + ')' if reason else ''}\n"
-                f"# 목록 {run['path']}  id {run['id']}\n# 작업 폴더 {run['cwd']}\n# 할 일 {run['text']}\n\n")
+        head = (_("# 시작 {0}  종료 코드 {1}{2}\n# 목록 {3}  id {4}\n# 작업 폴더 {5}\n# 할 일 {6}\n\n").format(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(run['start'])), run['proc'].returncode, '  (' + reason + ')' if reason else '', run['path'], run['id'], run['cwd'], run['text']))
         atomic_write(run["log"], (head + body).encode("utf-8"), backup=False)
     except OSError:
         pass
@@ -591,10 +601,10 @@ def finish_run(run, doc, reason=None):
     if reason is None and code == 0:
         t = doc.set_status(t, "review")
         if not t["result"]:
-            doc.set_result(t, f"끝남. 기록: {rel}")
+            doc.set_result(t, _("끝남. 기록: {0}").format(rel))
     else:
         t = doc.set_status(t, "blocked")
-        doc.set_result(t, f"실패({reason or f'종료 코드 {code}'}). 기록: {rel}")
+        doc.set_result(t, _("실패({0}). 기록: {1}").format(reason or _("종료 코드 {0}").format(code), rel))
 
 
 # ---------- CLI·MCP 공용 출력 ----------
@@ -618,8 +628,8 @@ def fmt_doc(doc, status=None, claude_only=False, hide_done=False):
         if not its:
             continue
         done = sum(t["status"] == "done" for t in s["items"])
-        out.append(f"\n## {s['title'] or '(섹션 없음)'}  {done}/{len(s['items'])}")
+        out.append(f"\n## {s['title'] or _('(섹션 없음)')}  {done}/{len(s['items'])}")
         out += [fmt_item(t) for t in its]
     if len(out) == 1:
-        out.append("(해당 항목 없음)")
+        out.append(_("(해당 항목 없음)"))
     return "\n".join(out)
